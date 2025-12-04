@@ -112,8 +112,15 @@ ROC-AUC	~0.81
 Confusion matrix, feature importance, and reports are generated automatically.
 
 # Screenshots
+<img width="200" height="200" alt="Screenshot 2025-12-04 at 21 21 23" src="https://github.com/user-attachments/assets/7ca0eeff-8dbc-4bcd-931f-67a8cf3ec768" />
+<img width="200" height="200" alt="Screenshot 2025-12-04 at 21 21 35" src="https://github.com/user-attachments/assets/3ef227c4-b237-4573-9630-5ee006e00d50" />
+<img width="200" height="200" alt="Screenshot 2025-12-04 at 21 22 19" src="https://github.com/user-attachments/assets/ba4bd6d5-94e2-4cc4-a657-eac2e3e735cd" />
+<img width="200" height="200" alt="Screenshot 2025-12-04 at 21 19 58" src="https://github.com/user-attachments/assets/98a8012d-a38f-447d-870d-9ae31e5679fa" />
+<img width="200" height="200" alt="Screenshot 2025-12-04 at 21 30 19" src="https://github.com/user-attachments/assets/ec08eee4-f9c1-4a73-a9ac-4279d4b685ea" />
 
 
+# App link
+https://diabetespredictionapp-ffcfgbmn3xxxe9ah7dl3rw.streamlit.app/
 
 # Deployment (Streamlit Cloud)
 
