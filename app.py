@@ -2,15 +2,13 @@ import csv
 from datetime import datetime, date
 from io import BytesIO
 from pathlib import Path
-
 import joblib
 import pandas as pd
 import streamlit as st
 from fpdf import FPDF
 from src.config import MODEL_PATH
-
 from openpyxl.styles import Font, PatternFill, Alignment
-
+import altair as alt  # NEW: for interactive feature importance chart
 # QR Code Support
 try:
     import qrcode
@@ -18,38 +16,22 @@ try:
 except ImportError:
     QR_AVAILABLE = False
 
+# STREAMLIT PAGE CONFIG
+st.set_page_config(page_title="Diabetes Risk Assessment",page_icon="🩺",layout="wide",initial_sidebar_state="expanded",)
 
-# =========================================================
-#                 STREAMLIT PAGE CONFIG
-# =========================================================
-st.set_page_config(
-    page_title="Diabetes Risk Assessment",
-    page_icon="🩺",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-
-# =========================================================
-#                   PATH / CONFIG
-# =========================================================
+# PATH / CONFIG
 PROJECT_ROOT = Path(__file__).resolve().parent
 REPORTS_DIR = PROJECT_ROOT / "reports"
 REPORTS_DIR.mkdir(exist_ok=True)
 HISTORY_CSV = REPORTS_DIR / "history.csv"
 
-
-# =========================================================
-#                   MODEL LOADING
-# =========================================================
+# MODEL LOADING
 @st.cache_resource
 def load_model():
     return joblib.load(MODEL_PATH)
 
+# DEFAULT FORM VALUES
 
-# =========================================================
-#               DEFAULT FORM VALUES
-# =========================================================
 DEFAULTS = {
     "pregnancies": 1,
     "glucose": 120.0,
@@ -60,7 +42,6 @@ DEFAULTS = {
     "dpf": 0.5,
     "age": 30,
 }
-
 
 def init_session_state():
     for key, value in DEFAULTS.items():
@@ -79,7 +60,6 @@ def init_session_state():
     st.session_state.setdefault("history", [])
 
     st.session_state.setdefault("reset_for_next", False)
-
 
 def apply_reset_if_needed():
     if st.session_state.get("reset_for_next", False):
@@ -100,9 +80,8 @@ def apply_reset_if_needed():
         st.session_state["reset_for_next"] = False
 
 
-# =========================================================
-#                   RISK CLASSIFICATION
-# =========================================================
+
+# RISK CLASSIFICATION
 def classify_risk(prob: float) -> str:
     if prob < 0.33:
         return "Low"
@@ -111,9 +90,9 @@ def classify_risk(prob: float) -> str:
     return "High"
 
 
-# =========================================================
-#                   HISTORY LOG
-# =========================================================
+
+# HISTORY LOG
+
 def log_history(record: dict):
     st.session_state["history"].append(record)
 
@@ -134,9 +113,8 @@ def log_history(record: dict):
         writer.writerow(record)
 
 
-# =========================================================
-#                   QR CODE
-# =========================================================
+
+# QR CODE
 def generate_qr_image(text: str, out_path: Path) -> Path:
     if not QR_AVAILABLE:
         return None
@@ -145,9 +123,45 @@ def generate_qr_image(text: str, out_path: Path) -> Path:
     return out_path
 
 
-# =========================================================
-#             PDF REPORT GENERATION  (ASCII SAFE)
-# =========================================================
+
+# FEATURE IMPORTANCE (Logistic Regression Coeffs)
+def get_feature_importance_df(model):
+    try:
+        if not hasattr(model, "named_steps"):
+            return None
+        log_reg = model.named_steps.get("log_reg")
+        if log_reg is None or not hasattr(log_reg, "coef_"):
+            return None
+        coefs = log_reg.coef_[0]
+
+        # Expected feature order used during training
+        features = [
+            "Pregnancies",
+            "Glucose",
+            "BloodPressure",
+            "SkinThickness",
+            "Insulin",
+            "BMI",
+            "DiabetesPedigreeFunction",
+            "Age",
+        ]
+
+        # Fallback if lengths don't match
+        if len(coefs) != len(features):
+            if hasattr(log_reg, "feature_names_in_"):
+                features = list(log_reg.feature_names_in_)
+            else:
+                features = [f"Feature {i}" for i in range(len(coefs))]
+
+        df = pd.DataFrame({"Feature": features,"Coefficient": coefs, })
+        df["AbsCoefficient"] = df["Coefficient"].abs()
+        return df.sort_values("AbsCoefficient", ascending=False)
+    except Exception:
+        return None
+
+
+
+# PDF REPORT GENERATION (ASCII SAFE)
 def create_pdf_report(input_df: pd.DataFrame, prob, pred_class, patient_info, risk_level):
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     file_path = REPORTS_DIR / f"diabetes_report_{ts}.pdf"
@@ -204,9 +218,9 @@ def create_pdf_report(input_df: pd.DataFrame, prob, pred_class, patient_info, ri
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 8, "Clinical Information", ln=True)
     pdf.set_font("Arial", "", 11)
-    pdf.multi_cell(0, 6, f"Symptoms: {patient_info.get('symptoms','Not provided')}")
+    pdf.multi_cell(0, 6, f"Symptoms: {patient_info.get('symptoms', 'Not provided')}")
     pdf.ln(2)
-    pdf.multi_cell(0, 6, f"Notes: {patient_info.get('notes','Not provided')}")
+    pdf.multi_cell(0, 6, f"Notes: {patient_info.get('notes', 'Not provided')}")
 
     pdf.ln(4)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
@@ -244,7 +258,6 @@ def create_pdf_report(input_df: pd.DataFrame, prob, pred_class, patient_info, ri
         pdf.cell(40, 7, u, border=1)
         pdf.cell(40, 7, r, border=1, ln=1)
 
-    # NOTE: all ranges below now use ASCII "-" only
     add_row("Pregnancies", row["Pregnancies"], "-", "0-10")
     add_row("Glucose", row["Glucose"], "mg/dL", "70-140")
     add_row("Blood Pressure", row["BloodPressure"], "mmHg", "90-120 / 60-80")
@@ -256,13 +269,8 @@ def create_pdf_report(input_df: pd.DataFrame, prob, pred_class, patient_info, ri
 
     pdf.ln(8)
     pdf.set_font("Arial", "I", 9)
-    pdf.multi_cell(
-        0,
-        5,
-        "Disclaimer: This automated report is for educational/demo purposes "
-        "and should not replace professional medical evaluation.",
-    )
-
+    pdf.multi_cell(0,5,"Disclaimer: This automated report is for educational/demo purposes "
+        "and should not replace professional medical evaluation.",)
     pdf.ln(5)
     pdf.set_font("Arial", "", 10)
     pdf.cell(0, 6, "Authorized Signatory: ____________________", ln=True)
@@ -271,21 +279,21 @@ def create_pdf_report(input_df: pd.DataFrame, prob, pred_class, patient_info, ri
     return file_path
 
 
-# =========================================================
-#                       UI LAYOUT
-# =========================================================
+
+# UI LAYOUT
+
 def main():
     init_session_state()
     apply_reset_if_needed()
     model = load_model()
+    feature_importance_df = get_feature_importance_df(model)
 
     # Title
     st.title("🩺 Diabetes Risk Assessment")
     st.caption("Machine-learning-powered clinical decision support tool")
 
-    # ---------------------------------------------
-    #            SIDEBAR CONTROL PANEL
-    # ---------------------------------------------
+
+    # SIDEBAR CONTROL PANEL
     with st.sidebar:
         st.header("⚙️ Controls")
 
@@ -299,38 +307,23 @@ def main():
         st.subheader("📁 Recent Patients")
 
         if st.session_state["history"]:
-            df = (
-                pd.DataFrame(st.session_state["history"])
-                .sort_values("timestamp", ascending=False)
-                .head(5)
-            )
+            df = (pd.DataFrame(st.session_state["history"]).sort_values("timestamp", ascending=False).head(5))
             for _, row in df.iterrows():
-                st.write(
-                    f"**{row['timestamp']}** — {row['patient_id']} | "
-                    f"{row['risk_level']} ({row['probability']:.2f})"
-                )
+                st.write(f"**{row['timestamp']}** — {row['patient_id']} | "
+                    f"{row['risk_level']} ({row['probability']:.2f})")
         else:
             st.info("No history yet.")
 
         if not QR_AVAILABLE:
             st.warning("QR Code unavailable. Install via: `pip install qrcode[pil]`")
 
-    # ---------------------------------------------
-    #                  MAIN TABS
-    # ---------------------------------------------
-    tab_predict, tab_history, tab_about = st.tabs([
-        "🧪 New Assessment",
-        "📚 Patient History",
-        "ℹ️ About the Model"
-    ])
 
-    # ========================================================
-    #                   TAB 1: PREDICTION
-    # ========================================================
+    # MAIN TABS
+    tab_predict, tab_history, tab_about = st.tabs(["New Assessment", "Patient History", "About the Model"])
+
+    # TAB 1: PREDICTION
     with tab_predict:
-
         st.header("Patient Information")
-
         col1, col2 = st.columns(2)
         with col1:
             name = st.text_input("Patient Name", key="patient_name")
@@ -429,9 +422,7 @@ def main():
                 "pdf_name": pdf_path.name,
             }
 
-        # -----------------------------
-        #      SHOW RESULTS
-        # -----------------------------
+        # SHOW RESULTS
         if st.session_state["last_result"] is not None:
             r = st.session_state["last_result"]
 
@@ -448,23 +439,16 @@ def main():
                 st.success("No Diabetes Detected")
 
             st.download_button(
-                "Download PDF Report",
-                data=r["pdf_bytes"],
-                file_name=r["pdf_name"],
-                mime="application/pdf",
-            )
+                "Download PDF Report",data=r["pdf_bytes"], file_name=r["pdf_name"],mime="application/pdf",)
 
             if st.button("Next Patient"):
                 st.session_state["last_result"] = None
                 st.session_state["reset_for_next"] = True
                 st.rerun()
 
-    # ========================================================
-    #                   TAB 2: HISTORY
-    # ========================================================
+    # TAB 2: HISTORY
     with tab_history:
         st.header("Patient History")
-
         if not st.session_state["history"]:
             st.info("No predictions yet.")
         else:
@@ -472,7 +456,6 @@ def main():
             st.dataframe(df)
 
             st.subheader("Export as Excel")
-
             excel_buffer = BytesIO()
 
             with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
@@ -502,56 +485,83 @@ def main():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
-
-# ========================================================
-#                   TAB 3: ABOUT THE MODEL
-# ========================================================
+    # TAB 3: ABOUT MODEL
     with tab_about:
-        st.header("ℹ️ About the Diabetes Prediction Model")
+        st.header("About the Diabetes Risk Model")
 
-        st.subheader("📘 Model Overview")
-        st.write("""
-        This application uses a **Logistic Regression** model to estimate the probability that
-        a patient may have diabetes based on clinical measurements.
-    
-        Logistic Regression is a statistical machine-learning model commonly used in healthcare
-        risk prediction because it is explainable and reliable for binary classification tasks.
-        """)
+        st.subheader("1. Model Overview")
+        st.write(
+            """
+            This application uses a **Logistic Regression** model to estimate the probability
+            that a patient may have diabetes, based on clinical measurements.
 
-        st.subheader("📊 Dataset Used")
-        st.write("""
-        The model is trained on the **PIMA Indians Diabetes Dataset**, a widely used benchmark
-        dataset in medical ML research. It includes clinical features such as:
-    
-        - Pregnancies  
-        - Glucose  
-        - Blood Pressure  
-        - Skin Thickness  
-        - Insulin  
-        - BMI  
-        - Diabetes Pedigree Function  
-        - Age  
-        """)
+            Logistic Regression is a simple, explainable model commonly used in healthcare
+            risk prediction for binary outcomes (e.g., diabetes vs no diabetes).
+            """
+        )
 
-        st.subheader("⚙️ How Predictions Work")
-        st.write("""
-        The model outputs a **probability between 0 and 1**:
-    
-        - **0.00 – 0.32 → Low Risk**  
-        - **0.33 – 0.65 → Moderate Risk**  
-        - **0.66 – 1.00 → High Risk**
-    
-        These thresholds are configurable and used only for **screening**, not diagnosis.
-        """)
+        st.subheader("2. Dataset Used")
+        st.write(
+            """
+            The model is trained on the **Pima Indians Diabetes Dataset**, a well-known open dataset.
+            It includes the following features:
 
-        st.subheader("🚨 Important Disclaimer")
-        st.warning("""
-        This tool is for **educational and demonstration purposes only**.
-        It is **NOT a medical device** and must not be used for clinical decision-making.
-        Always consult qualified healthcare professionals for medical advice.
-        """)
+            - Pregnancies  
+            - Glucose  
+            - Blood Pressure  
+            - Skin Thickness  
+            - Insulin  
+            - Body Mass Index (BMI)  
+            - Diabetes Pedigree Function (family history index)  
+            - Age  
+            """
+        )
 
-        st.info("Model Version: 1.0.0  |  Algorithm: Logistic Regression  |  Maintainer: Pranav Gujjar")
+        st.subheader("3. Feature Importance (Model Coefficients)")
+        if feature_importance_df is not None:
+            st.caption("Higher absolute value = stronger influence on the prediction.")
+            chart = (
+                alt.Chart(feature_importance_df)
+                .mark_bar()
+                .encode(
+                    y=alt.Y("Feature:N", sort="-x", title="Feature"),
+                    x=alt.X("AbsCoefficient:Q", title="|Coefficient| (importance)"),
+                    color=alt.condition(
+                        "datum.Coefficient > 0",
+                        alt.value("#ef4444"),  # positive = increases risk
+                        alt.value("#3b82f6"),  # negative = decreases risk
+                    ),
+                    tooltip=["Feature", "Coefficient", "AbsCoefficient"],
+                )
+                .properties(height=300)
+            )
+            st.altair_chart(chart, use_container_width=True)
+        else:
+            st.info("Feature importance is not available for this model configuration.")
+
+        st.subheader("4. How to Interpret the Score")
+        st.write(
+            """
+            The model outputs a **probability between 0 and 1**. For convenience, we group it into:
+
+            - **0.00 – 0.32 → Low Risk**  
+            - **0.33 – 0.65 → Moderate Risk**  
+            - **0.66 – 1.00 → High Risk**
+
+            These thresholds are configurable and intended only for *screening* and learning,
+            not for clinical diagnosis.
+            """
+        )
+
+        st.subheader("5. Important Disclaimer")
+        st.warning(
+            """
+            This tool is for **educational and demonstration purposes only**.
+            It is **NOT a medical device** and must not be used to make clinical decisions.
+            Always consult qualified healthcare professionals for medical advice.
+            """
+        )
+        st.info("Model: Logistic Regression  |  Version: 1.0.0  |  Maintainer: Pranav Gujjar")
 
 if __name__ == "__main__":
     main()

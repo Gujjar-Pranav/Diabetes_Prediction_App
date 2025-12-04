@@ -1,10 +1,11 @@
-streamlit
 pandas
 numpy
 scikit-learn
 matplotlib
 seaborn
 joblib
+streamlit
 fpdf
 qrcode[pil]
 openpyxl
+altair
