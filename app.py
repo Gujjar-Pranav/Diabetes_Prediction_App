@@ -318,7 +318,11 @@ def main():
     # ---------------------------------------------
     #                  MAIN TABS
     # ---------------------------------------------
-    tab_predict, tab_history = st.tabs(["🧪 New Assessment", "📚 Patient History"])
+    tab_predict, tab_history, tab_about = st.tabs([
+        "🧪 New Assessment",
+        "📚 Patient History",
+        "ℹ️ About the Model"
+    ])
 
     # ========================================================
     #                   TAB 1: PREDICTION
@@ -498,6 +502,56 @@ def main():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
+
+# ========================================================
+#                   TAB 3: ABOUT THE MODEL
+# ========================================================
+    with tab_about:
+        st.header("ℹ️ About the Diabetes Prediction Model")
+
+        st.subheader("📘 Model Overview")
+        st.write("""
+        This application uses a **Logistic Regression** model to estimate the probability that
+        a patient may have diabetes based on clinical measurements.
+    
+        Logistic Regression is a statistical machine-learning model commonly used in healthcare
+        risk prediction because it is explainable and reliable for binary classification tasks.
+        """)
+
+        st.subheader("📊 Dataset Used")
+        st.write("""
+        The model is trained on the **PIMA Indians Diabetes Dataset**, a widely used benchmark
+        dataset in medical ML research. It includes clinical features such as:
+    
+        - Pregnancies  
+        - Glucose  
+        - Blood Pressure  
+        - Skin Thickness  
+        - Insulin  
+        - BMI  
+        - Diabetes Pedigree Function  
+        - Age  
+        """)
+
+        st.subheader("⚙️ How Predictions Work")
+        st.write("""
+        The model outputs a **probability between 0 and 1**:
+    
+        - **0.00 – 0.32 → Low Risk**  
+        - **0.33 – 0.65 → Moderate Risk**  
+        - **0.66 – 1.00 → High Risk**
+    
+        These thresholds are configurable and used only for **screening**, not diagnosis.
+        """)
+
+        st.subheader("🚨 Important Disclaimer")
+        st.warning("""
+        This tool is for **educational and demonstration purposes only**.
+        It is **NOT a medical device** and must not be used for clinical decision-making.
+        Always consult qualified healthcare professionals for medical advice.
+        """)
+
+        st.info("Model Version: 1.0.0  |  Algorithm: Logistic Regression  |  Maintainer: Pranav Gujjar")
 
 if __name__ == "__main__":
     main()
