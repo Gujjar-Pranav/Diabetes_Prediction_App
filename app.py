@@ -146,7 +146,7 @@ def generate_qr_image(text: str, out_path: Path) -> Path:
 
 
 # =========================================================
-#             PDF REPORT GENERATION
+#             PDF REPORT GENERATION  (ASCII SAFE)
 # =========================================================
 def create_pdf_report(input_df: pd.DataFrame, prob, pred_class, patient_info, risk_level):
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -244,20 +244,23 @@ def create_pdf_report(input_df: pd.DataFrame, prob, pred_class, patient_info, ri
         pdf.cell(40, 7, u, border=1)
         pdf.cell(40, 7, r, border=1, ln=1)
 
-    add_row("Pregnancies", row["Pregnancies"], "-", "0–10")
-    add_row("Glucose", row["Glucose"], "mg/dL", "70–140")
-    add_row("Blood Pressure", row["BloodPressure"], "mmHg", "90–120 / 60–80")
-    add_row("Skin Thickness", row["SkinThickness"], "mm", "10–40")
-    add_row("Insulin", row["Insulin"], "uU/mL", "2–25 (fasting)")
-    add_row("BMI", row["BMI"], "kg/m²", "18.5–24.9")
+    # NOTE: all ranges below now use ASCII "-" only
+    add_row("Pregnancies", row["Pregnancies"], "-", "0-10")
+    add_row("Glucose", row["Glucose"], "mg/dL", "70-140")
+    add_row("Blood Pressure", row["BloodPressure"], "mmHg", "90-120 / 60-80")
+    add_row("Skin Thickness", row["SkinThickness"], "mm", "10-40")
+    add_row("Insulin", row["Insulin"], "uU/mL", "2-25 (fasting)")
+    add_row("BMI", row["BMI"], "kg/m2", "18.5-24.9")
     add_row("Diabetes Pedigree", row["DiabetesPedigreeFunction"], "-", "Family history index")
     add_row("Age", row["Age"], "years", "-")
 
     pdf.ln(8)
     pdf.set_font("Arial", "I", 9)
-    pdf.multi_cell(0, 5,
+    pdf.multi_cell(
+        0,
+        5,
         "Disclaimer: This automated report is for educational/demo purposes "
-        "and should not replace professional medical evaluation."
+        "and should not replace professional medical evaluation.",
     )
 
     pdf.ln(5)
@@ -270,7 +273,7 @@ def create_pdf_report(input_df: pd.DataFrame, prob, pred_class, patient_info, ri
 
 # =========================================================
 #                       UI LAYOUT
-#=========================================================
+# =========================================================
 def main():
     init_session_state()
     apply_reset_if_needed()
@@ -296,9 +299,16 @@ def main():
         st.subheader("📁 Recent Patients")
 
         if st.session_state["history"]:
-            df = pd.DataFrame(st.session_state["history"]).sort_values("timestamp", ascending=False).head(5)
+            df = (
+                pd.DataFrame(st.session_state["history"])
+                .sort_values("timestamp", ascending=False)
+                .head(5)
+            )
             for _, row in df.iterrows():
-                st.write(f"**{row['timestamp']}** — {row['patient_id']} | {row['risk_level']} ({row['probability']:.2f})")
+                st.write(
+                    f"**{row['timestamp']}** — {row['patient_id']} | "
+                    f"{row['risk_level']} ({row['probability']:.2f})"
+                )
         else:
             st.info("No history yet.")
 
@@ -342,20 +352,24 @@ def main():
 
         with c2:
             insulin = st.number_input("Insulin (uU/mL)", 0.0, 900.0, key="insulin")
-            bmi = st.number_input("BMI (kg/m²)", 0.0, 70.0, key="bmi")
+            bmi = st.number_input("BMI (kg/m2)", 0.0, 70.0, key="bmi")
             dpf = st.number_input("Diabetes Pedigree Function", 0.0, 3.0, key="dpf")
             age = st.number_input("Age (years)", 1, 120, key="age")
 
-        input_df = pd.DataFrame([{
-            "Pregnancies": pregnancies,
-            "Glucose": glucose,
-            "BloodPressure": bp,
-            "SkinThickness": skin,
-            "Insulin": insulin,
-            "BMI": bmi,
-            "DiabetesPedigreeFunction": dpf,
-            "Age": age,
-        }])
+        input_df = pd.DataFrame(
+            [
+                {
+                    "Pregnancies": pregnancies,
+                    "Glucose": glucose,
+                    "BloodPressure": bp,
+                    "SkinThickness": skin,
+                    "Insulin": insulin,
+                    "BMI": bmi,
+                    "DiabetesPedigreeFunction": dpf,
+                    "Age": age,
+                }
+            ]
+        )
 
         patient_info = {
             "name": name,
@@ -440,7 +454,6 @@ def main():
                 st.session_state["last_result"] = None
                 st.session_state["reset_for_next"] = True
                 st.rerun()
-
 
     # ========================================================
     #                   TAB 2: HISTORY
