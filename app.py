@@ -89,7 +89,28 @@ def classify_risk(prob: float) -> str:
         return "Moderate"
     return "High"
 
+# Short, plain-text recommendation based on risk level.
+def generate_risk_summary(risk_level: str) -> str:
+    rl = risk_level.lower()
 
+    if rl == "low":
+        return ("Low diabetes risk detected. Maintain a healthy lifestyle with a "
+            "balanced diet, regular physical activity, and routine annual check-ups."
+        )
+
+    if rl == "moderate":
+        return ("Moderate diabetes risk detected. Improve lifestyle habits "
+            "(exercise, diet, weight control) and schedule regular check-ups "
+            "to monitor blood glucose and related parameters."
+        )
+
+    if rl == "high":
+        return ("High diabetes risk detected. Please consult a licensed healthcare "
+            "professional as soon as possible for detailed evaluation and "
+            "confirmatory laboratory tests."
+        )
+
+    return "Risk information not available. Please consult a healthcare professional."
 
 # HISTORY LOG
 
@@ -121,7 +142,6 @@ def generate_qr_image(text: str, out_path: Path) -> Path:
     img = qrcode.make(text)
     img.save(out_path)
     return out_path
-
 
 
 # FEATURE IMPORTANCE (Logistic Regression Coeffs)
@@ -194,7 +214,23 @@ def create_pdf_report(input_df: pd.DataFrame, prob, pred_class, patient_info, ri
     # QR Code
     qr_path = None
     if QR_AVAILABLE:
-        qr_text = f"{patient_info['name']} | Risk: {risk_level} | Prob: {prob:.2f}"
+        row = input_df.iloc[0]
+        summary_text = generate_risk_summary(risk_level)
+        qr_text = (
+            f"Diabetes Risk: {risk_level.upper()} ({prob:.2f})\n"
+            "-------------------------\n"
+            "Diabetes Risk Assessment Report\n"
+            f"Patient: {patient_info['name']} (ID: {patient_info['id']})\n"
+            f"Age: {row['Age']} | Gender: {patient_info['gender']}\n"
+            f"Risk Level: {risk_level}\n"
+            f"Model Probability: {prob:.2f}\n\n"
+            "Summary:\n"
+            f"{summary_text}\n\n"
+            "Key Metrics:\n"
+            f"Glucose: {row['Glucose']} mg/dL | BMI: {row['BMI']}\n"
+            f"BP: {row['BloodPressure']} mmHg | Insulin: {row['Insulin']} uU/mL\n"
+        )
+
         qr_path = REPORTS_DIR / f"qr_{ts}.png"
         generate_qr_image(qr_text, qr_path)
         pdf.image(str(qr_path), x=165, y=30, w=30)
@@ -235,6 +271,14 @@ def create_pdf_report(input_df: pd.DataFrame, prob, pred_class, patient_info, ri
     pdf.cell(0, 6, f"Probability: {prob:.2f}", ln=True)
     pdf.cell(0, 6, f"Classification: {pred_text}", ln=True)
     pdf.cell(0, 6, f"Risk Category: {risk_level}", ln=True)
+
+    # NEW: risk-based recommendation paragraph
+    summary_text = generate_risk_summary(risk_level)
+    pdf.ln(3)
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(0, 6, "Clinical Recommendation:", ln=True)
+    pdf.set_font("Arial", "", 11)
+    pdf.multi_cell(0, 6, summary_text)
 
     pdf.ln(4)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
