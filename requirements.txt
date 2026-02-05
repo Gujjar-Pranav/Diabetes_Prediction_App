@@ -8,4 +8,4 @@ streamlit
 fpdf
 qrcode[pil]
 openpyxl
-altair
+altair<5
